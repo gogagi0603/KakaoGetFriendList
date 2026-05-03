@@ -89,13 +89,19 @@ app.MapGet("/api/friends", async (KakaoFriendsService friendsService, HttpContex
 app.MapGet("/debug/config", (IConfiguration config) =>
 {
     var restApiKey = config["Kakao:RestApiKey"];
-    var redirectUri = config["Kakao:RedirectUri"];
+    var rawEnvVar = Environment.GetEnvironmentVariable("Kakao__RestApiKey");
+    var allKakaoVars = Environment.GetEnvironmentVariables()
+        .Cast<System.Collections.DictionaryEntry>()
+        .Where(e => e.Key.ToString()!.StartsWith("Kakao", StringComparison.OrdinalIgnoreCase))
+        .Select(e => e.Key.ToString())
+        .ToList();
     return Results.Ok(new
     {
-        restApiKey_length = restApiKey?.Length ?? 0,
-        restApiKey_preview = restApiKey?.Length > 4 ? restApiKey[..4] + "***" : "(비어있음)",
-        redirectUri = redirectUri ?? "(비어있음)",
-        aspnetcore_env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "(없음)"
+        config_restApiKey_length = restApiKey?.Length ?? 0,
+        raw_env_Kakao__RestApiKey_length = rawEnvVar?.Length ?? 0,
+        kakao_related_env_vars = allKakaoVars,
+        aspnetcore_env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "(없음)",
+        railway_env = Environment.GetEnvironmentVariable("RAILWAY_ENVIRONMENT") ?? "(없음)"
     });
 });
 
