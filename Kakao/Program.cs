@@ -85,6 +85,20 @@ app.MapGet("/api/friends", async (KakaoFriendsService friendsService, HttpContex
     }
 });
 
+// 5. 설정값 확인 (디버그용 - 배포 확인 후 삭제)
+app.MapGet("/debug/config", (IConfiguration config) =>
+{
+    var restApiKey = config["Kakao:RestApiKey"];
+    var redirectUri = config["Kakao:RedirectUri"];
+    return Results.Ok(new
+    {
+        restApiKey_length = restApiKey?.Length ?? 0,
+        restApiKey_preview = restApiKey?.Length > 4 ? restApiKey[..4] + "***" : "(비어있음)",
+        redirectUri = redirectUri ?? "(비어있음)",
+        aspnetcore_env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "(없음)"
+    });
+});
+
 // 5. 토큰 스코프 확인 (디버그용)
 app.MapGet("/debug/token", async (IHttpClientFactory factory, HttpContext ctx) =>
 {
