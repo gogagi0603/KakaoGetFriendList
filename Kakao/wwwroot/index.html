@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>카카오 친구 목록</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #f7f7f7;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+        header { display: flex; align-items: center; gap: 12px; margin-bottom: 32px; width: 100%; max-width: 900px; }
+        header h1 { font-size: 24px; color: #3C1E1E; }
+        .user-info { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+        .user-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; background: #ddd; }
+        .user-name { font-size: 14px; font-weight: 600; color: #3C1E1E; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .user-email { font-size: 12px; color: #888; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .btn-kakao {
+            background: #FEE500; color: #3C1E1E; border: none;
+            padding: 14px 28px; border-radius: 8px; font-size: 16px;
+            font-weight: bold; cursor: pointer; display: flex;
+            align-items: center; gap: 8px; text-decoration: none;
+        }
+        .btn-kakao:hover { background: #F0D800; }
+        .btn-logout {
+            background: #eee; color: #555; border: none;
+            padding: 8px 16px; border-radius: 6px; font-size: 14px;
+            cursor: pointer; text-decoration: none; margin-left: auto;
+        }
+        .btn-logout:hover { background: #ddd; }
+        #status { color: #888; margin-bottom: 16px; font-size: 14px; }
+        .friends-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 12px; width: 100%; max-width: 900px;
+        }
+        .friend-card {
+            background: white; border-radius: 12px; padding: 16px;
+            display: flex; align-items: center; gap: 14px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+        .friend-card img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: #ddd; }
+        .friend-info { flex: 1; min-width: 0; }
+        .friend-name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .friend-favorite { font-size: 12px; color: #F4B400; margin-top: 2px; }
+        .login-box {
+            text-align: center; background: white; border-radius: 16px;
+            padding: 48px 40px; box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        .login-box p { color: #666; margin-bottom: 24px; }
+        .error-box {
+            background: #fff3f3; border: 1px solid #ffcdd2; border-radius: 12px;
+            padding: 24px; width: 100%; max-width: 900px;
+        }
+        .error-box h3 { color: #c62828; margin-bottom: 12px; }
+        .error-box pre { font-size: 13px; color: #333; white-space: pre-wrap; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>카카오 친구 목록</h1>
+        <div id="user-info" class="user-info" style="display:none">
+            <img id="user-avatar" class="user-avatar" alt="프로필">
+            <div>
+                <div id="user-name" class="user-name"></div>
+                <div id="user-email" class="user-email"></div>
+            </div>
+            <a href="/logout" class="btn-logout">로그아웃</a>
+        </div>
+    </header>
+
+    <div id="login-box" class="login-box" style="display:none">
+        <p>카카오 계정으로 로그인하여 친구 목록을 불러오세요.</p>
+        <a href="/login" class="btn-kakao">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#3C1E1E">
+                <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.743 1.617 5.157 4.077 6.617L5.04 21l4.42-2.897A11.67 11.67 0 0012 18.6c5.523 0 10-3.477 10-7.8S17.523 3 12 3z"/>
+            </svg>
+            카카오 로그인
+        </a>
+    </div>
+
+    <div id="error-box" class="error-box" style="display:none">
+        <h3>카카오 API 오류</h3>
+        <pre id="error-msg"></pre>
+        <br>
+        <a href="/login" class="btn-kakao" style="display:inline-flex">다시 로그인</a>
+    </div>
+
+    <div id="friends-box" style="display:none; width:100%; max-width:900px;">
+        <div id="status"></div>
+        <div id="friends-list" class="friends-grid"></div>
+    </div>
+
+    <div id="loading" style="color:#aaa">불러오는 중...</div>
+
+    <script>
+        function svgAvatar(label, size) {
+            const ch = (label || '?')[0];
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><rect width="${size}" height="${size}" rx="${size}" fill="#FEE500"/><text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" fill="#3C1E1E" font-size="${Math.round(size * 0.45)}" font-family="sans-serif">${ch}</text></svg>`;
+            return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+        }
+
+        async function loadUserInfo() {
+            const res = await fetch('/api/me');
+            if (!res.ok) return;
+            const user = await res.json();
+            const info = document.getElementById('user-info');
+            info.style.display = 'flex';
+            document.getElementById('user-name').textContent = user.nickname || '';
+            document.getElementById('user-email').textContent = user.email || '';
+            const avatar = document.getElementById('user-avatar');
+            avatar.onerror = () => { avatar.onerror = null; avatar.src = svgAvatar(user.nickname, 36); };
+            avatar.src = user.thumbnailImageUrl || svgAvatar(user.nickname, 36);
+        }
+
+        async function init() {
+            const res = await fetch('/api/friends');
+            document.getElementById('loading').style.display = 'none';
+
+            if (res.status === 401) {
+                document.getElementById('login-box').style.display = 'block';
+                return;
+            }
+
+            await loadUserInfo();
+
+            const data = await res.json();
+
+            if (res.status === 400 && data.code === -501) {
+                document.getElementById('error-box').style.display = 'block';
+                document.getElementById('error-msg').textContent = data.error;
+                return;
+            }
+
+            if (res.status === 502 || !res.ok) {
+                document.getElementById('error-box').style.display = 'block';
+                document.getElementById('error-msg').textContent =
+                    typeof data.kakaoError === 'string'
+                        ? data.kakaoError
+                        : JSON.stringify(data, null, 2);
+                return;
+            }
+
+            document.getElementById('friends-box').style.display = 'block';
+
+            const status = document.getElementById('status');
+            const list = document.getElementById('friends-list');
+            const friends = data;
+
+            status.textContent = `친구 ${friends.length}명`;
+
+            if (friends.length === 0) {
+                list.innerHTML = '<p style="color:#aaa">친구 목록이 없습니다.</p>';
+                return;
+            }
+
+            list.innerHTML = friends.map(f => `
+                <div class="friend-card">
+                    <img
+                        src="${f.profileThumbnailImage || svgAvatar(f.profileNickname, 48)}"
+                        onerror="this.onerror=null;this.src=svgAvatar('${(f.profileNickname || '?')[0]}',48)"
+                        alt="${f.profileNickname}">
+                    <div class="friend-info">
+                        <div class="friend-name">${f.profileNickname}</div>
+                        ${f.favorite ? '<div class="friend-favorite">즐겨찾기</div>' : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        init();
+    </script>
+</body>
+</html>
