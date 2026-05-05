@@ -34,6 +34,14 @@
             cursor: pointer; text-decoration: none; margin-left: auto;
         }
         .btn-logout:hover { background: #ddd; }
+        .btn-excel {
+            background: #217346; color: #fff; border: none;
+            padding: 8px 16px; border-radius: 6px; font-size: 14px;
+            font-weight: 600; cursor: pointer; text-decoration: none;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .btn-excel:hover { background: #1a5c38; }
+        .btn-excel:disabled { background: #aaa; cursor: not-allowed; }
         #status { color: #888; margin-bottom: 16px; font-size: 14px; }
         .friends-grid {
             display: grid;
@@ -93,7 +101,15 @@
     </div>
 
     <div id="friends-box" style="display:none; width:100%; max-width:900px;">
-        <div id="status"></div>
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+            <div id="status" style="margin:0; flex:1;"></div>
+            <button id="btn-export" class="btn-excel" onclick="exportExcel()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM12 17l-4-4h2.5v-4h3v4H16l-4 4z"/>
+                </svg>
+                엑셀 다운로드
+            </button>
+        </div>
         <div id="friends-list" class="friends-grid"></div>
     </div>
 
@@ -172,6 +188,26 @@
                     </div>
                 </div>
             `).join('');
+        }
+
+        async function exportExcel() {
+            const btn = document.getElementById('btn-export');
+            btn.disabled = true;
+            btn.textContent = '생성 중...';
+            try {
+                const res = await fetch('/api/friends/export');
+                if (!res.ok) { alert('엑셀 생성에 실패했습니다.'); return; }
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `청첩장_발송목록_${new Date().toISOString().slice(0,10)}.xlsx`;
+                a.click();
+                URL.revokeObjectURL(url);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM12 17l-4-4h2.5v-4h3v4H16l-4 4z"/></svg> 엑셀 다운로드`;
+            }
         }
 
         init();

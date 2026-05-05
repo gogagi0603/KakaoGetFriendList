@@ -6,6 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<KakaoAuthService>();
 builder.Services.AddScoped<KakaoFriendsService>();
+builder.Services.AddScoped<ExcelExportService>();
 
 var app = builder.Build();
 app.UseDefaultFiles();
@@ -85,7 +86,27 @@ app.MapGet("/api/friends", async (KakaoFriendsService friendsService, HttpContex
     }
 });
 
-// 5. 설정값 확인 (디버그용 - 배포 확인 후 삭제)
+// 5. 친구 목록 엑셀 export
+app.MapGet("/api/friends/export", async (KakaoFriendsService friendsService, ExcelExportService excelService, HttpContext ctx) =>
+{
+    var accessToken = ctx.Request.Cookies["kakao_token"];
+    if (string.IsNullOrEmpty(accessToken))
+        return Results.Unauthorized();
+
+    try
+    {
+        var friends = await friendsService.GetAllFriendsAsync(accessToken);
+        var bytes = excelService.ExportFriendsToExcel(friends);
+        var fileName = $"청첩장_발송목록_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+        return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+    }
+    catch (KakaoApiException ex)
+    {
+        return Results.Json(new { kakaoError = ex.ResponseBody }, statusCode: 502);
+    }
+});
+
+// 6. 설정값 확인 (디버그용 - 배포 확인 후 삭제)
 app.MapGet("/debug/config", (IConfiguration config) =>
 {
     var restApiKey = config["Kakao:RestApiKey"];
