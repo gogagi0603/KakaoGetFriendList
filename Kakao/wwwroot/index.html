@@ -214,10 +214,16 @@
                 pickedFriends = response.users || [];
                 renderFriends(pickedFriends);
             } catch (e) {
-                // 사용자가 팝업을 닫은 경우 무시
-                if (e && e.message && e.message.toLowerCase().includes('cancel')) return;
-                if (typeof e === 'string' && e.toLowerCase().includes('cancel')) return;
+                const msg = e?.message || (typeof e === 'string' ? e : JSON.stringify(e));
+                // 사용자가 팝업을 직접 닫은 경우 무시
+                if (msg && (msg.includes('cancel') || msg.includes('Cancel'))) return;
                 console.error('Picker error:', e);
+                document.getElementById('error-box').style.display = 'block';
+                document.getElementById('error-msg').textContent =
+                    '[Picker 오류]\n' + (msg || '알 수 없는 오류') +
+                    '\n\n확인사항:\n1. 카카오 개발자 콘솔 > 플랫폼 > Web 에 이 사이트 도메인 등록 여부\n2. 카카오 로그인 > 동의항목 > 카카오톡 친구 목록 활성화 여부';
+                document.getElementById('picker-box').style.display = 'none';
+                document.getElementById('friends-box').style.display = 'none';
             }
         }
 
