@@ -80,6 +80,18 @@ public class KakaoUserInfo
     public KakaoAccount? KakaoAccount { get; set; }
 }
 
+public class PickerFriend
+{
+    [JsonPropertyName("uuid")]
+    public string Uuid { get; set; } = "";
+
+    [JsonPropertyName("profile_nickname")]
+    public string ProfileNickname { get; set; } = "";
+
+    [JsonPropertyName("profile_thumbnail_image")]
+    public string? ProfileThumbnailImage { get; set; }
+}
+
 public class KakaoApiException : Exception
 {
     public System.Net.HttpStatusCode StatusCode { get; }

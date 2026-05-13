@@ -42,6 +42,12 @@
         }
         .btn-excel:hover { background: #1a5c38; }
         .btn-excel:disabled { background: #aaa; cursor: not-allowed; }
+        .btn-reselect {
+            background: #fff; color: #3C1E1E; border: 2px solid #FEE500;
+            padding: 8px 16px; border-radius: 6px; font-size: 14px;
+            font-weight: 600; cursor: pointer;
+        }
+        .btn-reselect:hover { background: #FFFDE0; }
         #status { color: #888; margin-bottom: 16px; font-size: 14px; }
         .friends-grid {
             display: grid;
@@ -56,12 +62,18 @@
         .friend-card img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: #ddd; }
         .friend-info { flex: 1; min-width: 0; }
         .friend-name { font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .friend-favorite { font-size: 12px; color: #F4B400; margin-top: 2px; }
         .login-box {
             text-align: center; background: white; border-radius: 16px;
             padding: 48px 40px; box-shadow: 0 2px 12px rgba(0,0,0,0.08);
         }
         .login-box p { color: #666; margin-bottom: 24px; }
+        .picker-box {
+            text-align: center; background: white; border-radius: 16px;
+            padding: 48px 40px; box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            width: 100%; max-width: 500px;
+        }
+        .picker-box p { color: #666; margin-bottom: 8px; font-size: 15px; }
+        .picker-box .hint { color: #aaa; font-size: 13px; margin-bottom: 28px; }
         .error-box {
             background: #fff3f3; border: 1px solid #ffcdd2; border-radius: 12px;
             padding: 24px; width: 100%; max-width: 900px;
@@ -94,15 +106,27 @@
     </div>
 
     <div id="error-box" class="error-box" style="display:none">
-        <h3>카카오 API 오류</h3>
+        <h3>오류</h3>
         <pre id="error-msg"></pre>
         <br>
         <a href="/login" class="btn-kakao" style="display:inline-flex">다시 로그인</a>
     </div>
 
+    <div id="picker-box" class="picker-box" style="display:none">
+        <p>카카오톡 친구 목록에서 원하는 친구를 선택하세요.</p>
+        <p class="hint">서비스 미가입 친구도 포함되어 표시됩니다.</p>
+        <button class="btn-kakao" style="margin:0 auto;" onclick="openPicker()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#3C1E1E">
+                <path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.743 1.617 5.157 4.077 6.617L5.04 21l4.42-2.897A11.67 11.67 0 0012 18.6c5.523 0 10-3.477 10-7.8S17.523 3 12 3z"/>
+            </svg>
+            친구 선택하기
+        </button>
+    </div>
+
     <div id="friends-box" style="display:none; width:100%; max-width:900px;">
         <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
-            <div id="status" style="margin:0; flex:1;"></div>
+            <div id="status" style="margin:0; flex:1; color:#888; font-size:14px;"></div>
+            <button class="btn-reselect" onclick="openPicker()">다시 선택</button>
             <button id="btn-export" class="btn-excel" onclick="exportExcel()">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 1.5L18.5 9H13V3.5zM12 17l-4-4h2.5v-4h3v4H16l-4 4z"/>
@@ -115,7 +139,12 @@
 
     <div id="loading" style="color:#aaa">불러오는 중...</div>
 
+    <script src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.2/kakao.min.js"
+            integrity="sha384-TiCUE00h649CAMonG018J2ujOgDKW/kVWlChEuu4jK2vxfAAD0eZxzCKakxg55G4"
+            crossorigin="anonymous"></script>
     <script>
+        let pickedFriends = [];
+
         function svgAvatar(label, size) {
             const ch = (label || '?')[0];
             const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><rect width="${size}" height="${size}" rx="${size}" fill="#FEE500"/><text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" fill="#3C1E1E" font-size="${Math.round(size * 0.45)}" font-family="sans-serif">${ch}</text></svg>`;
@@ -126,8 +155,7 @@
             const res = await fetch('/api/me');
             if (!res.ok) return;
             const user = await res.json();
-            const info = document.getElementById('user-info');
-            info.style.display = 'flex';
+            document.getElementById('user-info').style.display = 'flex';
             document.getElementById('user-name').textContent = user.nickname || '';
             document.getElementById('user-email').textContent = user.email || '';
             const avatar = document.getElementById('user-avatar');
@@ -136,66 +164,105 @@
         }
 
         async function init() {
-            const res = await fetch('/api/friends');
+            const [configRes, tokenRes] = await Promise.all([
+                fetch('/api/kakao-config'),
+                fetch('/api/token-for-picker')
+            ]);
+
             document.getElementById('loading').style.display = 'none';
 
-            if (res.status === 401) {
+            if (tokenRes.status === 401) {
                 document.getElementById('login-box').style.display = 'block';
                 return;
             }
 
+            if (!configRes.ok || !tokenRes.ok) {
+                document.getElementById('error-box').style.display = 'block';
+                document.getElementById('error-msg').textContent = '서버 설정을 불러오지 못했습니다.';
+                return;
+            }
+
+            const config = await configRes.json();
+            const tokenData = await tokenRes.json();
+
+            if (!config.javascriptKey) {
+                document.getElementById('error-box').style.display = 'block';
+                document.getElementById('error-msg').textContent = 'Kakao:JavascriptKey가 appsettings.json에 설정되지 않았습니다.';
+                return;
+            }
+
+            if (!Kakao.isInitialized()) {
+                Kakao.init(config.javascriptKey);
+            }
+            Kakao.Auth.setAccessToken(tokenData.accessToken);
+
             await loadUserInfo();
+            document.getElementById('picker-box').style.display = 'block';
+        }
 
-            const data = await res.json();
+        async function openPicker() {
+            try {
+                const response = await Kakao.Picker.selectFriends({
+                    title: '친구 선택',
+                    maxPickableCount: 500,
+                    minPickableCount: 1,
+                    enableSearch: true,
+                    showFavorite: true,
+                    showPickedFriend: true,
+                });
 
-            if (res.status === 400 && data.code === -501) {
-                document.getElementById('error-box').style.display = 'block';
-                document.getElementById('error-msg').textContent = data.error;
-                return;
+                pickedFriends = response.users || [];
+                renderFriends(pickedFriends);
+            } catch (e) {
+                // 사용자가 팝업을 닫은 경우 무시
+                if (e && e.message && e.message.toLowerCase().includes('cancel')) return;
+                if (typeof e === 'string' && e.toLowerCase().includes('cancel')) return;
+                console.error('Picker error:', e);
             }
+        }
 
-            if (res.status === 502 || !res.ok) {
-                document.getElementById('error-box').style.display = 'block';
-                document.getElementById('error-msg').textContent =
-                    typeof data.kakaoError === 'string'
-                        ? data.kakaoError
-                        : JSON.stringify(data, null, 2);
-                return;
-            }
-
+        function renderFriends(friends) {
+            document.getElementById('picker-box').style.display = 'none';
             document.getElementById('friends-box').style.display = 'block';
+            document.getElementById('status').textContent = `${friends.length}명 선택됨`;
 
-            const status = document.getElementById('status');
             const list = document.getElementById('friends-list');
-            const friends = data;
-
-            status.textContent = `친구 ${friends.length}명`;
-
             if (friends.length === 0) {
-                list.innerHTML = '<p style="color:#aaa">친구 목록이 없습니다.</p>';
+                list.innerHTML = '<p style="color:#aaa">선택된 친구가 없습니다.</p>';
                 return;
             }
 
-            list.innerHTML = friends.map(f => `
-                <div class="friend-card">
-                    <img
-                        src="${f.profileThumbnailImage || svgAvatar(f.profileNickname, 48)}"
-                        onerror="this.onerror=null;this.src=svgAvatar('${(f.profileNickname || '?')[0]}',48)"
-                        alt="${f.profileNickname}">
-                    <div class="friend-info">
-                        <div class="friend-name">${f.profileNickname}</div>
-                        ${f.favorite ? '<div class="friend-favorite">즐겨찾기</div>' : ''}
-                    </div>
-                </div>
-            `).join('');
+            list.innerHTML = friends.map(f => {
+                const name = f.profile_nickname || '?';
+                const thumb = f.profile_thumbnail_image;
+                const firstChar = name[0];
+                return `
+                    <div class="friend-card">
+                        <img
+                            src="${thumb || svgAvatar(name, 48)}"
+                            onerror="this.onerror=null;this.src=svgAvatar('${firstChar}',48)"
+                            alt="${name}">
+                        <div class="friend-info">
+                            <div class="friend-name">${name}</div>
+                        </div>
+                    </div>`;
+            }).join('');
         }
 
         async function exportExcel() {
+            if (pickedFriends.length === 0) {
+                alert('먼저 친구를 선택해주세요.');
+                return;
+            }
             const btn = document.getElementById('btn-export');
             btn.disabled = true;
             btn.textContent = '생성 중...';
             try {
-                const res = await fetch('/api/friends/export');
+                const res = await fetch('/api/friends/picker-export', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(pickedFriends)
+                });
                 if (!res.ok) { alert('엑셀 생성에 실패했습니다.'); return; }
                 const blob = await res.blob();
                 const url = URL.createObjectURL(blob);

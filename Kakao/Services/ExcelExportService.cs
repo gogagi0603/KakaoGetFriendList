@@ -27,6 +27,21 @@ public class ExcelExportService
         return package.GetAsByteArray();
     }
 
+    public byte[] ExportPickerFriendsToExcel(List<PickerFriend> friends)
+    {
+        ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+
+        using var package = new ExcelPackage();
+        var sheet = package.Workbook.Worksheets.Add("청첩장 발송 목록");
+
+        WriteHeader(sheet);
+        WritePickerData(sheet, friends);
+        AddDropdownValidations(sheet, friends.Count);
+        StyleSheet(sheet, friends.Count);
+
+        return package.GetAsByteArray();
+    }
+
     private static void WriteHeader(ExcelWorksheet sheet)
     {
         var headers = new[]
@@ -66,6 +81,29 @@ public class ExcelExportService
             // 빈칸으로 두고 테두리만 적용
 
             // 행 배경: 짝수 행 연한 색
+            if (i % 2 == 1)
+            {
+                for (int col = 3; col <= 11; col++)
+                {
+                    if (col == 10) continue;
+                    sheet.Cells[row, col].Style.Fill.PatternType = ExcelFillStyle.Solid;
+                    sheet.Cells[row, col].Style.Fill.BackgroundColor.SetColor(Color.FromArgb(0xFA, 0xFA, 0xFA));
+                }
+            }
+        }
+    }
+
+    private static void WritePickerData(ExcelWorksheet sheet, List<PickerFriend> friends)
+    {
+        for (int i = 0; i < friends.Count; i++)
+        {
+            int row = i + 2;
+            var f = friends[i];
+
+            SetAutoCell(sheet.Cells[row, 1], i + 1);
+            SetAutoCell(sheet.Cells[row, 2], f.ProfileNickname);
+            SetAutoCell(sheet.Cells[row, 10], "");
+
             if (i % 2 == 1)
             {
                 for (int col = 3; col <= 11; col++)

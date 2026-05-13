@@ -86,7 +86,37 @@ app.MapGet("/api/friends", async (KakaoFriendsService friendsService, HttpContex
     }
 });
 
-// 5. 친구 목록 엑셀 export
+// 5. Kakao JavaScript Key 반환 (프론트 SDK 초기화용)
+app.MapGet("/api/kakao-config", (IConfiguration config) =>
+    Results.Ok(new { javascriptKey = config["Kakao:JavascriptKey"] }));
+
+// 6. Picker용 액세스 토큰 반환 (JS SDK 인증용)
+app.MapGet("/api/token-for-picker", (HttpContext ctx) =>
+{
+    var accessToken = ctx.Request.Cookies["kakao_token"];
+    if (string.IsNullOrEmpty(accessToken))
+        return Results.Unauthorized();
+    return Results.Ok(new { accessToken });
+});
+
+// 7. Picker로 선택한 친구 목록 엑셀 export
+app.MapPost("/api/friends/picker-export", (
+    HttpContext ctx,
+    List<PickerFriend> friends,
+    ExcelExportService excelService) =>
+{
+    if (string.IsNullOrEmpty(ctx.Request.Cookies["kakao_token"]))
+        return Results.Unauthorized();
+
+    if (friends == null || friends.Count == 0)
+        return Results.BadRequest("친구 목록이 없습니다.");
+
+    var bytes = excelService.ExportPickerFriendsToExcel(friends);
+    var fileName = $"청첩장_발송목록_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+    return Results.File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
+});
+
+// 8. 친구 목록 엑셀 export (기존 REST API 방식)
 app.MapGet("/api/friends/export", async (KakaoFriendsService friendsService, ExcelExportService excelService, HttpContext ctx) =>
 {
     var accessToken = ctx.Request.Cookies["kakao_token"];
